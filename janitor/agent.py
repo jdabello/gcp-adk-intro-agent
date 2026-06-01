@@ -10,7 +10,9 @@ resource_scanner_agent = Agent(
     model=settings.GEMINI_MODEL,
     instruction="""
     You are a Cloud Resource Scanner.
-    Return *all* resources.
+    Call `get_compute_instances_list` to fetch every VM in the project, then
+    return the result as a JSON object matching the `VMInstanceList` schema
+    (a single key `vm_instances` whose value is the list of VMs).
     """,
     tools=[
         tools.get_compute_instances_list,
@@ -18,6 +20,8 @@ resource_scanner_agent = Agent(
         tools.get_current_date,
         tools.add_days_to_date,
     ],
+    output_schema=schemas.VMInstanceList,
+    output_key="resources",
 )
 
 # The root_agent is the entry point for the user query.
