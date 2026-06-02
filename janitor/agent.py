@@ -1,5 +1,9 @@
 from google.adk import Agent
 from google.adk.agents import SequentialAgent
+from google.adk.agents.remote_a2a_agent import (
+    AGENT_CARD_WELL_KNOWN_PATH,
+    RemoteA2aAgent,
+)
 from google.adk.tools.mcp_tool import MCPToolset, StreamableHTTPConnectionParams
 
 import janitor.schemas as schemas
@@ -127,9 +131,23 @@ resource_labeler_agent = Agent(
     ],
 )
 
+resource_cleaner_agent = RemoteA2aAgent(
+    name="resource_cleaner_agent",
+    description="Stops idle VMs whose `janitor-scheduled` label has been set.",
+    agent_card=(
+        f"{settings.A2A_SERVER_URL.rstrip('/')}"
+        f"/a2a/resource_cleaner_agent{AGENT_CARD_WELL_KNOWN_PATH}"
+    ),
+)
+
 orchestrator_agent = SequentialAgent(
     name="orchestrator_agent",
-    sub_agents=[resource_scanner_agent, resource_monitor_agent, resource_labeler_agent],
+    sub_agents=[
+        resource_scanner_agent,
+        resource_monitor_agent,
+        resource_labeler_agent,
+        resource_cleaner_agent,
+    ],
 )
 
 # The root_agent is the entry point for the user query.
