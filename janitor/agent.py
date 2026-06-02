@@ -1,9 +1,16 @@
 from google.adk import Agent
 from google.adk.agents import SequentialAgent
+from google.adk.tools.mcp_tool import MCPToolset, StreamableHTTPConnectionParams
 
 import janitor.schemas as schemas
 import janitor.settings as settings
 import janitor.tools as tools
+
+label_mcp_toolset = MCPToolset(
+    connection_params=StreamableHTTPConnectionParams(
+        url=settings.MCP_SERVER_URL,
+    ),
+)
 
 
 resource_scanner_agent = Agent(
@@ -54,6 +61,44 @@ resource_monitor_agent = Agent(
     ],
     output_schema=schemas.VMStatsList,
     output_key="idle_resources",
+)
+
+resource_labeler_agent = Agent(
+    name="resource_labeler_agent",
+    model=settings.GEMINI_MODEL,
+    instruction="""
+    You are a Cloud Resource Labeler. The Cloud Resource Monitor has stored
+    the idle VMs in session state under the key `idle_resources` (a
+    `VMStatsList`).
+
+    Idle resources to label:
+    {idle_resources}
+
+    Goal: tag each idle VM with a `janitor-scheduled` label whose value is the
+    date 7 days from today (format `YYYY-MM-DD`). Skip any VM that already has
+    a `janitor-scheduled` label — do NOT overwrite it.
+
+    Steps:
+    1. Build the list of instance identifiers in the form
+       `project_id/zone/name` from `idle_resources.vm_stats`.
+    2. Call `get_current_date`, then `add_days_to_date` with `days=7`. Use the
+       result as the label value (call this `scheduled_date`).
+    3. Call the MCP tool `get_labels` with the full list of identifiers to
+       fetch each VM's existing labels.
+    4. For each VM:
+         - If its labels dict already contains a `janitor-scheduled` key,
+           SKIP it and note that it was skipped.
+         - Otherwise, call the MCP tool `add_label` with just that single VM's
+           identifier (as a one-element list), `label_key="janitor-scheduled"`,
+           and `label_value=scheduled_date`.
+    5. Reply with a short summary: which VMs were labeled with what value,
+       and which were skipped (and why).
+    """,
+    tools=[
+        tools.get_current_date,
+        tools.add_days_to_date,
+        label_mcp_toolset,
+    ],
 )
 
 orchestrator_agent = SequentialAgent(
