@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from google.cloud import compute_v1
 from google.cloud import monitoring_v3
 
+import janitor.settings as settings
+
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 
 
@@ -47,9 +49,9 @@ def get_compute_instance_stats(instances: list[str]) -> list[dict]:
     Returns:
         A list of dictionaries, where each dictionary represents a VM instance. The following keys are present:
            - name: The name of the VM.
-           - cpu_utilization: The average CPU utilization of the VM over the last week, 1 is 100%.
-           - received_bytes: The average number of bytes received by the VM over the last week.
-           - sent_bytes: The average number of bytes sent by the VM over the last week.
+           - cpu_utilization: The average CPU utilization of the VM over the lookback window (settings.METRICS_LOOKBACK_SECONDS), 1 is 100%.
+           - received_bytes: The average number of bytes received by the VM over the lookback window (settings.METRICS_LOOKBACK_SECONDS).
+           - sent_bytes: The average number of bytes sent by the VM over the lookback window (settings.METRICS_LOOKBACK_SECONDS).
     """
     client = monitoring_v3.MetricServiceClient()
 
@@ -60,7 +62,7 @@ def get_compute_instance_stats(instances: list[str]) -> list[dict]:
         "compute.googleapis.com/instance/network/sent_bytes_count": "sent_bytes",
     }
 
-    period = 600  # seconds (we're looking at last 10 minutes for this exercise, but this should a whole week or more)
+    period = settings.METRICS_LOOKBACK_SECONDS
 
     # Define the time interval for the metric
     end_time = datetime.now(timezone.utc)

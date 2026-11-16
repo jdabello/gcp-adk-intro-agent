@@ -12,3 +12,8 @@ MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8081/")
 # --port=8082` and keep this default, or override with the full public URL
 # plus a valid id-token mechanism.
 A2A_SERVER_URL = os.getenv("A2A_SERVER_URL", "http://127.0.0.1:8080")
+
+# How far back (in seconds) the monitor looks at CPU/network metrics when
+# deciding whether a VM is idle. The lab default is 10 minutes so freshly
+# created VMs have data; in a real project use a week or more (604800).
+METRICS_LOOKBACK_SECONDS = int(os.getenv("METRICS_LOOKBACK_SECONDS", "600"))
