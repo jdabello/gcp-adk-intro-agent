@@ -13,6 +13,11 @@ MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8081/")
 # plus a valid id-token mechanism.
 A2A_SERVER_URL = os.getenv("A2A_SERVER_URL", "http://127.0.0.1:8080")
 
+# How far back (in seconds) the monitor looks at CPU/network metrics when
+# deciding whether a VM is idle. The lab default is 10 minutes so freshly
+# created VMs have data; in a real project use a week or more (604800).
+METRICS_LOOKBACK_SECONDS = int(os.getenv("METRICS_LOOKBACK_SECONDS", "600"))
+
 # Gemini Decisions API (gemini-decision-1). Only available through AI Studio
 # with an API key for now (no Vertex AI support yet), so this one call uses
 # GEMINI_API_KEY while the rest of the app stays on Vertex.

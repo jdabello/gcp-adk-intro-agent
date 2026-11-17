@@ -62,4 +62,13 @@ adk web
 
 Then open <http://127.0.0.1:8000> and pick the `janitor` app.
 
+### Run the tests
+
+The unit tests mock all Google Cloud calls, so they don't need credentials or a project:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
 The agent code lives in the [`janitor/`](janitor/) directory. Use [`reset-labels.sh`](reset-labels.sh) to reset resource labels between runs.
