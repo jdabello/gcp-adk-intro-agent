@@ -16,8 +16,8 @@ PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 _DECISIONS_VMS_PER_REQUEST = 500
 
 _IDLE_POLICY = """You are reviewing Google Cloud VM instances for an automated
-cleanup job that stops idle machines. Metrics are averages over a short recent
-observation window.
+cleanup job that stops idle machines. Metrics are averages over the last
+{lookback_seconds} seconds.
 
 A VM counts as idle when it is doing no meaningful work: CPU utilization is
 very low (a few percent or less, where 1.0 means 100%) AND network traffic
@@ -226,7 +226,8 @@ def decide_idle_vms(vm_stats: list[dict]) -> list[dict]:
                 "criteria": ["Low", "Medium", "High"],
             }
 
-        answers = _call_decisions_api(_IDLE_POLICY + "\n".join(rows), questions)
+        policy = _IDLE_POLICY.format(lookback_seconds=settings.METRICS_LOOKBACK_SECONDS)
+        answers = _call_decisions_api(policy + "\n".join(rows), questions)
 
         for i, vm in enumerate(chunk):
             idle = answers[f"idle_{i}"]
