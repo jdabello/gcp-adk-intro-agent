@@ -17,3 +17,15 @@ A2A_SERVER_URL = os.getenv("A2A_SERVER_URL", "http://127.0.0.1:8080")
 # deciding whether a VM is idle. The lab default is 10 minutes so freshly
 # created VMs have data; in a real project use a week or more (604800).
 METRICS_LOOKBACK_SECONDS = int(os.getenv("METRICS_LOOKBACK_SECONDS", "600"))
+
+# Gemini Decisions API (gemini-decision-1). Only available through AI Studio
+# with an API key for now (no Vertex AI support yet), so this one call uses
+# GEMINI_API_KEY while the rest of the app stays on Vertex.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+DECISION_MODEL = "gemini-decision-1"
+DECISIONS_API_URL = os.getenv(
+    "DECISIONS_API_URL", "https://generativelanguage.googleapis.com/v1beta/decisions"
+)
+# VMs whose calibrated "is idle" probability is at or above this are passed on
+# to the labeler.
+IDLE_PROBABILITY_THRESHOLD = float(os.getenv("IDLE_PROBABILITY_THRESHOLD", "0.7"))

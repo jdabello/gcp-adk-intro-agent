@@ -2,8 +2,10 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
+import janitor.schemas as schemas
 import janitor.tools as tools
 
 
@@ -110,3 +112,92 @@ def test_instance_stats_rejects_malformed_id():
     with patch("janitor.tools.monitoring_v3.MetricServiceClient"):
         with pytest.raises(ValueError):
             tools.get_compute_instance_stats(["missing-zone"])
+
+
+# --- decide_idle_vms (Gemini Decisions API) ---------------------------------
+
+
+def _vm(name, cpu=0.0, rx=0.0, tx=0.0, status="RUNNING"):
+    return {
+        "project_id": "p",
+        "name": name,
+        "zone": "us-central1-a",
+        "status": status,
+        "machine_type": "e2-small",
+        "cpu_utilization": cpu,
+        "received_bytes": rx,
+        "sent_bytes": tx,
+    }
+
+
+def _decisions_response(idle_probs):
+    """Fake a Decisions API reply: one noul + one score answer per VM index."""
+    answers = {}
+    for i, p in enumerate(idle_probs):
+        answers[f"idle_{i}"] = {"type": "noul", "noul": p, "confidence": 0.9}
+        answers[f"risk_{i}"] = {"type": "score", "score": 0.5}
+    return httpx.Response(200, json={"answers": answers})
+
+
+@pytest.fixture
+def api_key(monkeypatch):
+    monkeypatch.setattr(tools.settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(tools.settings, "IDLE_PROBABILITY_THRESHOLD", 0.7)
+
+
+@patch("janitor.tools.httpx.post")
+def test_decide_idle_vms_keeps_only_vms_above_threshold(mock_post, api_key):
+    mock_post.return_value = _decisions_response([0.97, 0.04])
+
+    result = tools.decide_idle_vms([_vm("idle-vm"), _vm("busy-vm", cpu=0.6, rx=1e6, tx=1e6)])
+
+    assert result == [
+        {**_vm("idle-vm"), "idle_probability": 0.97, "idle_confidence": 0.9, "cleanup_risk": 0.5}
+    ]
+    # Output must still validate against the monitor's output schema.
+    schemas.VMStatsList(vm_stats=result)
+
+
+@patch("janitor.tools.httpx.post")
+def test_decide_idle_vms_sends_batched_request(mock_post, api_key, monkeypatch):
+    monkeypatch.setattr(tools.settings, "METRICS_LOOKBACK_SECONDS", 604800)
+    mock_post.return_value = _decisions_response([0.9, 0.9])
+
+    tools.decide_idle_vms([_vm("vm-a"), _vm("vm-b")])
+
+    mock_post.assert_called_once()
+    kwargs = mock_post.call_args.kwargs
+    assert kwargs["headers"] == {"x-goog-api-key": "test-key"}
+    body = kwargs["json"]
+    assert body["model"] == "gemini-decision-1"
+    assert set(body["questions"]) == {"idle_0", "risk_0", "idle_1", "risk_1"}
+    assert body["questions"]["idle_0"]["type"] == "noul"
+    assert body["questions"]["risk_1"]["criteria"] == ["Low", "Medium", "High"]
+    assert "604800 seconds" in body["input"]
+    assert "name=vm-b" in body["input"]
+
+
+@patch("janitor.tools.httpx.post")
+def test_decide_idle_vms_splits_large_inventories(mock_post, api_key):
+    mock_post.side_effect = lambda url, headers, json, timeout: _decisions_response(
+        [0.9] * (len(json["questions"]) // 2)
+    )
+
+    result = tools.decide_idle_vms([_vm(f"vm-{i}") for i in range(501)])
+
+    assert mock_post.call_count == 2  # 500 VMs (1,000 questions) max per request
+    assert len(result) == 501
+    assert result[-1]["name"] == "vm-500"
+
+
+@patch("janitor.tools.httpx.post")
+def test_decide_idle_vms_raises_on_api_error(mock_post, api_key):
+    mock_post.return_value = httpx.Response(403, text="API key not valid")
+    with pytest.raises(RuntimeError, match="HTTP 403"):
+        tools.decide_idle_vms([_vm("vm-a")])
+
+
+def test_decide_idle_vms_requires_api_key(monkeypatch):
+    monkeypatch.setattr(tools.settings, "GEMINI_API_KEY", None)
+    with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+        tools.decide_idle_vms([_vm("vm-a")])

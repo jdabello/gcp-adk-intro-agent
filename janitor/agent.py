@@ -64,14 +64,17 @@ resource_monitor_agent = Agent(
          If the list is empty, skip to step 4 and emit `{"vm_stats": []}`.
       2. Call `get_compute_instance_stats` with that list to get per-VM CPU
          and network metrics.
-      3. Filter to the *idle* VMs only. A VM is idle when its
-         `cpu_utilization` is below 0.05 (5%) AND both `received_bytes` and
-         `sent_bytes` are near zero. Also treat any VM in status `TERMINATED`
-         as idle.
-      4. Emit a JSON object of the shape `{"vm_stats": <filtered list>}`
-         matching the `VMStatsList` schema. Each item must include all
-         `VMStats` fields (the original VM fields plus `cpu_utilization`,
-         `received_bytes`, `sent_bytes`).
+      3. Merge each VM from `resources` with its stats (match on `name`) into
+         one dict with `project_id`, `name`, `zone`, `status`,
+         `machine_type`, `cpu_utilization`, `received_bytes` and
+         `sent_bytes`. A VM with no stats gets 0 for the three metrics.
+         Call `decide_idle_vms` ONCE with the full merged list. It uses the
+         Gemini Decisions API to return only the idle VMs, each annotated with
+         `idle_probability`, `idle_confidence` and `cleanup_risk`. Do NOT
+         filter or second-guess its result yourself.
+      4. Emit a JSON object of the shape `{"vm_stats": <list returned by
+         decide_idle_vms>}` matching the `VMStatsList` schema, keeping every
+         field it returned.
 
     Hard rules:
       - NEVER reply conversationally. No prose, no apologies, no markdown
@@ -80,6 +83,7 @@ resource_monitor_agent = Agent(
     """,
     tools=[
         tools.get_compute_instance_stats,
+        tools.decide_idle_vms,
     ],
     output_schema=schemas.VMStatsList,
     output_key="idle_resources",
