@@ -29,6 +29,18 @@ GOOGLE_CLOUD_LOCATION=$REGION
 EOF
 ```
 
+### Gemini Decisions API
+
+`resource_monitor_agent` uses the [Gemini Decisions API](https://aistudio.google.com/docs/decisions-api) (`gemini-decision-1`) to decide which VMs are idle. All VM metrics go out in one batched request. For each VM it asks a calibrated yes/no question ("is it idle?") and a Low/Medium/High cleanup-risk score. VMs whose idle probability is at or above `IDLE_PROBABILITY_THRESHOLD` (default `0.7`) are passed to the labeler.
+
+The Decisions API is only available through AI Studio for now, not Vertex AI. Create a key at <https://aistudio.google.com/api-keys> and add it to `janitor/.env`:
+
+```bash
+GEMINI_API_KEY=<YOUR_AI_STUDIO_KEY>
+```
+
+Only this one call uses the key. VM names and metrics are sent to AI Studio, and every other model call stays on Vertex. The tool calls the REST endpoint through `httpx`, because the `google-genai` 3.2+ SDK that exposes `client.decisions` conflicts with every current `google-adk` release.
+
 ### Authentication (only if running outside Cloud Shell)
 
 Cloud Shell is already authenticated. On a local machine, sign in and set the quota project so Vertex AI calls are billed and authorized against your lab project:

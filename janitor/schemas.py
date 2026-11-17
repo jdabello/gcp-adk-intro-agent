@@ -23,6 +23,18 @@ class VMStats(VMInstance):
     sent_bytes: float = Field(
         description="The average number of bytes sent by the VM instance."
     )
+    idle_probability: float | None = Field(
+        default=None,
+        description="Calibrated probability (0-1) from the Gemini Decisions API that the VM is idle.",
+    )
+    idle_confidence: float | None = Field(
+        default=None,
+        description="Decisions API confidence (0-1) in the idle verdict.",
+    )
+    cleanup_risk: float | None = Field(
+        default=None,
+        description="Decisions API risk score for stopping the VM: 0=Low, 1=Medium, 2=High.",
+    )
 
 
 class VMStatsList(BaseModel):
